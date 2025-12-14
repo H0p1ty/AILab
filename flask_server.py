@@ -5,16 +5,6 @@ from wip import Chatbot
 app = Flask(__name__)
 LLMs = dict()
 
-@app.route('/hello', methods=['GET'])
-def hello_get():
-    name = request.args.get('name', 'world')
-    return f"Hello, {name}!"
-
-@app.route('/hello', methods=['POST'])
-def hello_post():
-    data = request.get_json()
-    return jsonify(message=f"Hello, {data['name']}!")
-
 @app.route('/LLM/initialize', methods=['POST'])
 def LLM_initialize():
     data = request.get_json()
