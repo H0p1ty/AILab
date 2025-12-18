@@ -85,8 +85,6 @@ Something went wrong during file reading...
         file_context = FileContext(file_type, context)
         file_context.context = context
         file_context.file_type = file_type
-        print(f"context found: {file_context.context}\n")
-        print(f"file_type found: {file_context.file_type}\n")
         return file_context
 
     def _rag_system_message_content(self, query: str) -> str:
@@ -117,10 +115,6 @@ Something went wrong during file reading...
         user_message = {"role": USER, "content": query}
         self.chat_history.append(user_message)
         content = self._rag_system_message_content(query)
-
-        print(f"""
-CONTENT = {content}
-""")
 
         messages = [
             {
@@ -156,15 +150,7 @@ CONTENT = {content}
         return response
     
     def add_file(self, file_path: str) -> bool:
-        print("add_file")
-        context = self._get_context(file_path,  DEBUG_READ_FILE_QUERY)
-        print(f"""
-    FILE_PATH = {file_path}
-    """)
         context = self._get_context(file_path, DEBUG_READ_FILE_QUERY)
-        print(f"""
-    CONTEXT = {context.context}
-    """)
         if context is None:
             return False
         self.file_paths.append(file_path)
