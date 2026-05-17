@@ -7,10 +7,10 @@ LLM_MODEL = "mistral:7b"
 logger = logging.getLogger(__name__)
 
 SYSTEM_PROMPT = (
-    "You are a helpful assistant engaged in a multi-turn conversation about documents. "
-    "Each user message includes retrieved document context followed by a question. "
-    "Use that context as your primary source of facts. "
+    "You are a helpful assistant engaged in a multi-turn conversation. "
+    "When document context is provided, use it as your primary source of facts. "
     "For follow-up or clarification questions, you may also draw on prior conversation turns. "
+    "If no context is provided, answer from your general knowledge. "
     "If a factual answer cannot be found in either the context or the conversation history, say so."
 )
 
@@ -20,8 +20,11 @@ class LLMError(Exception):
 
 
 async def generate(question: str, context_chunks: list[str], history: list[dict]) -> str:
-    context = "\n\n---\n\n".join(context_chunks)
-    user_msg = f"Context:\n{context}\n\nQuestion: {question}"
+    if context_chunks:
+        context = "\n\n---\n\n".join(context_chunks)
+        user_msg = f"Context:\n{context}\n\nQuestion: {question}"
+    else:
+        user_msg = question
 
     messages = [{"role": "system", "content": SYSTEM_PROMPT}]
     messages.extend(history)

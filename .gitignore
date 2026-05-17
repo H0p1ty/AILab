@@ -1,3 +1,5 @@
 /venv
 test*
 pdfs
+__pycache__
+chroma_db

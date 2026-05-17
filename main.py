@@ -30,6 +30,7 @@ def build_search_query(question: str, history: list[dict]) -> str:
     if len(history) < 2:
         return question
     last_answer = next((m["content"] for m in reversed(history) if m["role"] == "assistant"), "")
+    print(last_answer) # DEBUG
     return f"{last_answer[:300]} {question}" if last_answer else question
 
 
@@ -102,8 +103,6 @@ async def query_rag(req: QueryRequest):
         raise HTTPException(status_code=503, detail="Cannot reach Ollama. Is it running on localhost:11434?")
 
     sources = retrieve(q_embedding[0], n_results=req.n_results)
-    if not sources:
-        raise HTTPException(status_code=404, detail="No documents have been indexed yet. Upload a PDF first.")
 
     try:
         answer = await generate(req.question, sources, history)
