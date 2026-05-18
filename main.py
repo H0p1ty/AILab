@@ -1,7 +1,7 @@
 import uuid
 
 import httpx
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse as _JSONResponse
 from pydantic import BaseModel
 
@@ -30,7 +30,6 @@ def build_search_query(question: str, history: list[dict]) -> str:
     if len(history) < 2:
         return question
     last_answer = next((m["content"] for m in reversed(history) if m["role"] == "assistant"), "")
-    print(last_answer) # DEBUG
     return f"{last_answer[:300]} {question}" if last_answer else question
 
 
@@ -52,12 +51,13 @@ class UploadResponse(BaseModel):
     doc_id: str
     filename: str
     chunks_indexed: int
+    session_id: str
 
 
 # ---------- endpoints ----------
 
 @app.post("/upload", response_model=UploadResponse, summary="Upload a PDF and index it")
-async def upload_pdf(file: UploadFile = File(...)):
+async def upload_pdf(file: UploadFile = File(...), session_id: str | None = Form(None)):
     if not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are supported.")
 
@@ -77,10 +77,12 @@ async def upload_pdf(file: UploadFile = File(...)):
     except httpx.ConnectError:
         raise HTTPException(status_code=503, detail="Cannot reach Ollama. Is it running on localhost:11434?")
 
+    sid = session_id or str(uuid.uuid4())
+    sessions.setdefault(sid, [])
     doc_id = str(uuid.uuid4())
-    add_chunks(doc_id, chunks, embeddings)
+    add_chunks(doc_id, sid, chunks, embeddings)
 
-    return UploadResponse(doc_id=doc_id, filename=file.filename, chunks_indexed=len(chunks))
+    return UploadResponse(doc_id=doc_id, filename=file.filename, chunks_indexed=len(chunks), session_id=sid)
 
 
 @app.post("/query", response_model=QueryResponse, summary="Ask a question against indexed documents")
@@ -102,7 +104,7 @@ async def query_rag(req: QueryRequest):
     except httpx.ConnectError:
         raise HTTPException(status_code=503, detail="Cannot reach Ollama. Is it running on localhost:11434?")
 
-    sources = retrieve(q_embedding[0], n_results=req.n_results)
+    sources = retrieve(q_embedding[0], sid, n_results=req.n_results)
 
     try:
         answer = await generate(req.question, sources, history)
@@ -119,15 +121,15 @@ async def query_rag(req: QueryRequest):
     return QueryResponse(answer=answer, sources=sources, session_id=sid)
 
 
-@app.get("/documents", summary="List indexed document IDs")
-def get_documents():
-    return {"documents": list_doc_ids()}
+@app.get("/documents/{session_id}", summary="List indexed document IDs")
+def get_documents(session_id: str):
+    return {"documents": list_doc_ids(session_id)}
 
 
-@app.delete("/documents/{doc_id}", summary="Remove a document and its chunks from the index")
-def remove_document(doc_id: str):
-    delete_doc(doc_id)
-    return {"deleted": doc_id}
+@app.delete("/documents/{session_id}/{doc_id}", summary="Remove a document and its chunks from the index")
+def remove_document(session_id: str, doc_id: str):
+    delete_doc(session_id, doc_id)
+    return {"deleted": {"session_id": session_id, "doc_id": doc_id}}
 
 
 @app.get("/sessions/{session_id}", summary="Get conversation history for a session")
