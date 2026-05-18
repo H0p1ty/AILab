@@ -25,7 +25,12 @@ def _init() -> None:
                 content  TEXT NOT NULL
             )
         """)
-        # TODO: Make a table for documents to track doc_id and session_id for easier cleanup
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS documents (
+                doc_id     TEXT PRIMARY KEY,
+                session_id TEXT NOT NULL REFERENCES sessions(session_id)
+            )
+        """)
 
 _init()
 
@@ -63,4 +68,25 @@ def append_messages(session_id: str, messages: list[dict]) -> None:
 def delete_session(session_id: str) -> None:
     with _conn() as conn:
         conn.execute("DELETE FROM messages WHERE session_id = ?", (session_id,))
+        conn.execute("DELETE FROM documents WHERE session_id = ?", (session_id,))
         conn.execute("DELETE FROM sessions WHERE session_id = ?", (session_id,))
+
+
+def register_doc(doc_id: str, session_id: str) -> None:
+    with _conn() as conn:
+        conn.execute(
+            "INSERT INTO documents (doc_id, session_id) VALUES (?, ?)", (doc_id, session_id)
+        )
+
+
+def get_session_docs(session_id: str) -> list[str]:
+    with _conn() as conn:
+        rows = conn.execute(
+            "SELECT doc_id FROM documents WHERE session_id = ?", (session_id,)
+        ).fetchall()
+    return [r["doc_id"] for r in rows]
+
+
+def unregister_doc(doc_id: str) -> None:
+    with _conn() as conn:
+        conn.execute("DELETE FROM documents WHERE doc_id = ?", (doc_id,))

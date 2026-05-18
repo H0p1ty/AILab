@@ -33,14 +33,6 @@ def retrieve(embedding: List[float], session_id: str, n_results: int = 5) -> Lis
     return results["documents"][0] if results["documents"] else []
 
 
-def list_doc_ids(session_id: str) -> List[str]:
-    col = _collection()
-    kwargs = {"where": {"session_id": session_id}} if session_id else {}
-    result = col.get(include=["metadatas"], **kwargs)
-    if not result["metadatas"]:
-        return []
-    return sorted({m["doc_id"] for m in result["metadatas"]})
-
 
 def delete_doc(session_id: str, doc_id: str) -> None:
     col = _collection()

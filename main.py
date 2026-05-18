@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from rag.embedder import EmbeddingError, embed
 from rag.llm import LLMError, generate
 from rag.pdf_loader import chunk_text, load_pdf
-from rag.retriever import add_chunks, delete_doc, list_doc_ids, retrieve
+from rag.retriever import add_chunks, delete_doc, retrieve
 from rag import session_store
 
 
@@ -79,6 +79,7 @@ async def upload_pdf(file: UploadFile = File(...), session_id: str | None = Form
     session_store.create_session(sid)
     doc_id = str(uuid.uuid4())
     add_chunks(doc_id, sid, chunks, embeddings)
+    session_store.register_doc(doc_id, sid)
 
     return UploadResponse(doc_id=doc_id, filename=file.filename, chunks_indexed=len(chunks), session_id=sid)
 
@@ -122,12 +123,13 @@ async def query_rag(req: QueryRequest):
 
 @app.get("/documents/{session_id}", summary="List indexed document IDs")
 def get_documents(session_id: str):
-    return {"documents": list_doc_ids(session_id)}
+    return {"documents": session_store.get_session_docs(session_id)}
 
 
 @app.delete("/documents/{session_id}/{doc_id}", summary="Remove a document and its chunks from the index")
 def remove_document(session_id: str, doc_id: str):
     delete_doc(session_id, doc_id)
+    session_store.unregister_doc(doc_id)
     return {"deleted": {"session_id": session_id, "doc_id": doc_id}}
 
 
@@ -140,6 +142,8 @@ def get_session(session_id: str):
 
 @app.delete("/sessions/{session_id}", summary="Delete a session and its history")
 def delete_session(session_id: str):
+    for doc_id in session_store.get_session_docs(session_id):
+        delete_doc(session_id, doc_id)
     session_store.delete_session(session_id)
     return {"deleted": session_id}
 
