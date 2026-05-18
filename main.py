@@ -9,6 +9,7 @@ from rag.embedder import EmbeddingError, embed
 from rag.llm import LLMError, generate
 from rag.pdf_loader import chunk_text, load_pdf
 from rag.retriever import add_chunks, delete_doc, list_doc_ids, retrieve
+from rag import session_store
 
 
 class JSONResponse(_JSONResponse):
@@ -20,9 +21,6 @@ app = FastAPI(
     description="Retrieval-Augmented Generation over PDFs using Llama 3.2 + ChromaDB",
     default_response_class=JSONResponse,
 )
-
-# In-memory session store: session_id → list of {"role": "user"|"assistant", "content": ...}
-sessions: dict[str, list[dict]] = {}
 
 
 def build_search_query(question: str, history: list[dict]) -> str:
@@ -78,7 +76,7 @@ async def upload_pdf(file: UploadFile = File(...), session_id: str | None = Form
         raise HTTPException(status_code=503, detail="Cannot reach Ollama. Is it running on localhost:11434?")
 
     sid = session_id or str(uuid.uuid4())
-    sessions.setdefault(sid, [])
+    session_store.create_session(sid)
     doc_id = str(uuid.uuid4())
     add_chunks(doc_id, sid, chunks, embeddings)
 
@@ -92,7 +90,8 @@ async def query_rag(req: QueryRequest):
 
     # Create or retrieve session
     sid = req.session_id or str(uuid.uuid4())
-    history = sessions.get(sid, [])
+    session_store.create_session(sid)
+    history = session_store.get_history(sid)
 
     # Expand search query with recent context for better retrieval on follow-ups
     search_query = build_search_query(req.question, history)
@@ -113,10 +112,10 @@ async def query_rag(req: QueryRequest):
     except httpx.ConnectError:
         raise HTTPException(status_code=503, detail="Cannot reach Ollama. Is it running on localhost:11434?")
 
-    # Store the new turn in history (without injected context)
-    history.append({"role": "user", "content": req.question})
-    history.append({"role": "assistant", "content": answer})
-    sessions[sid] = history
+    session_store.append_messages(sid, [
+        {"role": "user", "content": req.question},
+        {"role": "assistant", "content": answer},
+    ])
 
     return QueryResponse(answer=answer, sources=sources, session_id=sid)
 
@@ -134,15 +133,14 @@ def remove_document(session_id: str, doc_id: str):
 
 @app.get("/sessions/{session_id}", summary="Get conversation history for a session")
 def get_session(session_id: str):
-    history = sessions.get(session_id)
-    if history is None:
+    if not session_store.session_exists(session_id):
         raise HTTPException(status_code=404, detail="Session not found")
-    return {"session_id": session_id, "history": history}
+    return {"session_id": session_id, "history": session_store.get_history(session_id)}
 
 
 @app.delete("/sessions/{session_id}", summary="Delete a session and its history")
 def delete_session(session_id: str):
-    sessions.pop(session_id, None)
+    session_store.delete_session(session_id)
     return {"deleted": session_id}
 
 
