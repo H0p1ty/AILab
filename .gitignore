@@ -4,3 +4,4 @@ pdfs
 __pycache__
 chroma_db
 sessions.db
+rag/__pycache__
