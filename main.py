@@ -3,9 +3,11 @@ import uuid
 import httpx
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse as _JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from rag.embedder import EmbeddingError, embed
+
+MAX_UPLOAD_BYTES = 5 * 1024 * 1024  # 5 MB
 from rag.llm import LLMError, generate
 from rag.pdf_loader import chunk_text, load_pdf
 from rag.retriever import add_chunks, delete_doc, retrieve
@@ -34,8 +36,8 @@ def build_search_query(question: str, history: list[dict]) -> str:
 # ---------- request / response models ----------
 
 class QueryRequest(BaseModel):
-    question: str
-    n_results: int = 5
+    question: str = Field(max_length=2000)
+    n_results: int = Field(default=5, ge=1, le=20)
     session_id: str | None = None
 
 
@@ -60,6 +62,9 @@ async def upload_pdf(file: UploadFile = File(...), session_id: str | None = Form
         raise HTTPException(status_code=400, detail="Only PDF files are supported.")
 
     content = await file.read()
+    if len(content) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail=f"File too large. Maximum size is {MAX_UPLOAD_BYTES // (1024 * 1024)} MB.")
+
     text = load_pdf(content)
     if not text.strip():
         raise HTTPException(status_code=422, detail="Could not extract text from the PDF.")
