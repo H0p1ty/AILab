@@ -4,6 +4,7 @@ import chromadb
 
 _client = chromadb.PersistentClient(path="./chroma_db")
 
+K_FIRST = 5  # Number of top chunks to return for retrieval
 
 def _collection():
     return _client.get_or_create_collection(
@@ -19,7 +20,7 @@ def add_chunks(doc_id: str, session_id: str, chunks: List[str], embeddings: List
     col.add(ids=ids, embeddings=embeddings, documents=chunks, metadatas=metadatas)
 
 
-def retrieve(embedding: List[float], session_id: str, n_results: int = 5) -> List[str]:
+def retrieve(embedding: List[float], session_id: str, n_results: int = K_FIRST) -> List[str]:
     col = _collection()
     where = {"session_id": session_id}
     count = len(col.get(where=where)["ids"])

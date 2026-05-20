@@ -8,6 +8,10 @@ from pydantic import BaseModel, Field
 from rag.embedder import EmbeddingError, embed
 
 MAX_UPLOAD_BYTES = 5 * 1024 * 1024  # 5 MB
+MAX_LENGTH = 2000  # Max question length to prevent abuse
+K_FIRST = 5  # Number of top chunks to return for retrieval
+CONTEXT_WINDOW = 6  # Number of recent messages to include in search query expansion
+CONTEXT_CHARS = 150  # Number of chars from recent messages to include in search query expansion
 from rag.llm import LLMError, generate
 from rag.pdf_loader import chunk_text, load_pdf
 from rag.retriever import add_chunks, delete_doc, retrieve
@@ -28,15 +32,15 @@ app = FastAPI(
 def build_search_query(question: str, history: list[dict]) -> str:
     if not history:
         return question
-    recent_context = " ".join(m["content"][:150] for m in history[-6:])
+    recent_context = " ".join(m["content"][:CONTEXT_CHARS] for m in history[-CONTEXT_WINDOW:])
     return f"{recent_context} {question}"
 
 
 # ---------- request / response models ----------
 
 class QueryRequest(BaseModel):
-    question: str = Field(max_length=2000)
-    n_results: int = Field(default=5, ge=1, le=20)
+    question: str = Field(max_length=MAX_LENGTH)
+    n_results: int = Field(default=K_FIRST, ge=1, le=20)
     session_id: str | None = None
 
 
