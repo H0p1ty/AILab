@@ -26,11 +26,10 @@ app = FastAPI(
 
 
 def build_search_query(question: str, history: list[dict]) -> str:
-    """Augment search query with recent conversation context for better retrieval on follow-ups."""
-    if len(history) < 2:
+    if not history:
         return question
-    last_answer = next((m["content"] for m in reversed(history) if m["role"] == "assistant"), "")
-    return f"{last_answer[:300]} {question}" if last_answer else question
+    recent_context = " ".join(m["content"][:150] for m in history[-6:])
+    return f"{recent_context} {question}"
 
 
 # ---------- request / response models ----------
